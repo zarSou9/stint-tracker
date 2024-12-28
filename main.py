@@ -14,6 +14,7 @@ from typing import Literal
 
 """
 TO DO
+- Add a show last logs function which just displays recent logs
 - When showing stats I should be able to filter by which projects I was working on.
     - Be able to classify projects into different categories, and have the stats by default, show the default category
     - Also treats should be for specific categories of projects
@@ -98,7 +99,7 @@ def clear_print(text: str, lines_to_clear: int = 1):
     if lines_to_clear > 1:
         for _ in range(lines_to_clear - 1):
             print("\033[A\033[K", end="", flush=True)
-    print(f"\033[K\r{' '*100}", end="", flush=True)
+    print(f"\033[K\r{' ' * 60}", end="", flush=True)
     print(f"\033[K\r{text}", end="", flush=True)
 
 

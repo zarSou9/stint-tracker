@@ -76,6 +76,10 @@ python main.py
 5. Continue working until you're ready to end the stint
 6. Use other commands to track your progress and view statistics
 
+## Notes
+
+- The timer will add a newline after each update if the terminal window is not wide enough
+
 ## Requirements
 
 - Python 3.x
