@@ -14,14 +14,12 @@ from typing import Literal
 
 """
 TO DO
-- After a stint is completed, allow for writing what was last worked on, which will be shown the next time I work on it to remind me.
 - When showing stats I should be able to filter by which projects I was working on.
     - Be able to classify projects into different categories, and have the stats by default, show the default category
     - Also treats should be for specific categories of projects
     - Categories are essentially just new instances of the project, but I should be able to manage them with one script
 - Add past weeks bar chart in summary which shows a row for the total time for each of the last max 10 weeks up to current week
-- Add treat summary which insentivizes more treats, and shows progress towards each treat
-- Add week functionality where you can specify a date or range of dates and gives you data accordingly
+- Verify week function - where you can specify a date or range of dates and gives you data accordingly
     - In the input it tells you the earliest date you can call to get week data
     - When lw is called just have a continuous input which can either take:
         - Single date - Show a single bar chart for each of the days in that week and then just a number for the total time spent
@@ -100,6 +98,7 @@ def clear_print(text: str, lines_to_clear: int = 1):
     if lines_to_clear > 1:
         for _ in range(lines_to_clear - 1):
             print("\033[A\033[K", end="", flush=True)
+    print(f"\033[K\r{' '*100}", end="", flush=True)
     print(f"\033[K\r{text}", end="", flush=True)
 
 
@@ -138,7 +137,7 @@ async def stop_watch(
     end_message: str | None = None,
     start_time=time.time(),
 ):
-    print()
+    print("\n")
     try:
         while True:
             elapsed_time = time.time() - start_time
@@ -179,20 +178,24 @@ def get_logs() -> list[dict]:
 
 async def start_stint_async():
     settings = get_json()
+    logs = get_logs()
+
     selected: str = await questionary.select(
         "Select stint:",
         choices=[*settings["stint_options"], "Other"],
     ).ask_async()
 
-    details = None
     if selected == "Other":
         selected = input("Describe the task: ")
         add_task = input("Add task to stint options? (y/n) ")
         if add_task.lower().find("y") != -1:
             settings["stint_options"].append(selected)
             save_json(settings)
-    else:
-        details = input("Add additional details (optional): ")
+
+    # Show last stint info for same task if available
+    last_stint = next((log for log in reversed(logs) if log["task"] == selected), None)
+    if last_stint and last_stint.get("notes"):
+        print(f"\nNotes from last time: {last_stint['notes']}\n")
 
     start_time = time.time()
 
@@ -213,14 +216,17 @@ async def start_stint_async():
         )
     except asyncio.CancelledError:
         pass
+
+    notes = input("\nNotes to future self (optional): ").strip()
+
     with open(LOGS_PATH, "r") as file:
         logs: list = json.load(file)
     logs.append(
         {
             "task": selected,
-            "details": details or None,
             "start": round(start_time),
             "duration": round(time.time() - start_time),
+            "notes": notes or None,
         }
     )
     save_json(logs, LOGS_PATH)
@@ -501,8 +507,153 @@ def show_summary():
     print(f"\nTotal duration: {seconds_to_time(get_total_duration(logs))}\n")
 
 
-def show_week(id: str):
-    pass
+def show_week(logs=get_logs(), settings=get_json()):
+    if not logs:
+        print("\nNo logs found.")
+        return
+
+    # Get earliest date from logs
+    earliest_date = time.strftime(
+        "%Y-%m-%d", time.localtime(min(log["start"] for log in logs))
+    )
+
+    print(f"\nEnter a date (YYYY-MM-DD) or date range (YYYY-MM-DD:YYYY-MM-DD)")
+    print(f"Earliest available date: {earliest_date}")
+    date_input = input("> ").strip()
+
+    if not date_input:
+        return
+
+    try:
+        if ":" in date_input:
+            # Handle date range
+            start_date, end_date = date_input.split(":")
+            start_timestamp = time.mktime(time.strptime(start_date, "%Y-%m-%d"))
+            end_timestamp = time.mktime(time.strptime(end_date, "%Y-%m-%d"))
+
+            if start_timestamp > end_timestamp:
+                start_timestamp, end_timestamp = end_timestamp, start_timestamp
+
+            # Adjust to start of weeks
+            start_weekday = time.localtime(start_timestamp).tm_wday
+            start_timestamp -= start_weekday * day
+
+            # Get all weeks in range
+            weeks_data = []
+            current_timestamp = start_timestamp
+            while current_timestamp <= end_timestamp:
+                week_logs = [
+                    log
+                    for log in logs
+                    if current_timestamp <= log["start"] < current_timestamp + week
+                ]
+                if week_logs:
+                    weeks_data.append(
+                        get_week_data(
+                            current_timestamp,
+                            week_logs,
+                            is_first=current_timestamp == start_timestamp,
+                            is_last=current_timestamp + week > end_timestamp,
+                        )
+                    )
+                current_timestamp += week
+
+            if not weeks_data:
+                print("\nNo data found for this date range.")
+                return
+
+            # Show weekly totals bar chart
+            print_rich_bar_chart(
+                [week["total"] for week in weeks_data],
+                labels=[week["date"] for week in weeks_data],
+                title="Weekly Totals",
+            )
+            print(
+                f"\nTotal time: {seconds_to_time(sum(week['total'] for week in weeks_data))}"
+            )
+
+        else:
+            # Handle single date
+            timestamp = time.mktime(time.strptime(date_input, "%Y-%m-%d"))
+            weekday = time.localtime(timestamp).tm_wday
+            week_start = timestamp - (weekday * day)
+
+            week_logs = [
+                log for log in logs if week_start <= log["start"] < week_start + week
+            ]
+
+            if not week_logs:
+                print("\nNo data found for this week.")
+                return
+
+            week_data = get_week_data(week_start, week_logs)
+            print_rich_bar_chart(
+                week_data["daily_totals"],
+                labels=days,
+                title=f"Week of {week_data['date']}",
+            )
+            print(f"\nTotal time: {seconds_to_time(week_data['total'])}")
+
+    except ValueError:
+        print("\nInvalid date format. Please use YYYY-MM-DD.")
+
+
+def show_treats(logs=get_logs(), settings=get_json()):
+    console = Console()
+    print("\nTreat Summary\n")
+
+    # Get total duration in hours for relevant periods
+    total_hours = get_total_duration(logs) / 3600
+
+    # Show total time treats
+    if settings.get("total_time_treats"):
+        table = Table(title="Total Time Treats", show_header=True)
+        table.add_column("Hours Required")
+        table.add_column("Progress")
+        table.add_column("Treat")
+
+        for treat in sorted(settings["total_time_treats"], key=lambda x: x["hours"]):
+            progress = min(100, (total_hours / treat["hours"]) * 100)
+            progress_bar = (
+                f"[{'=' * int(progress/2)}{' ' * (50-int(progress/2))}] {progress:.1f}%"
+            )
+            table.add_row(
+                str(treat["hours"]), progress_bar, treat["treat"]["description"]
+            )
+        console.print(table)
+        print()
+
+    # Show high score treats
+    for interval in settings.get("high_score_intervals", []):
+        if not interval.get("treats"):
+            continue
+
+        scores = get_high_score(logs, interval["unit"], interval["amount"])
+        current_hours = scores["current"] / 3600
+
+        title = f"{interval['amount']} {interval['unit'].capitalize()}"
+        if interval["amount"] > 1:
+            title += "s"
+        table = Table(title=f"{title} Treats", show_header=True)
+        table.add_column("Hours Required")
+        table.add_column("Progress")
+        table.add_column("Treat")
+
+        for treat in sorted(interval["treats"], key=lambda x: x["hours"]):
+            progress = min(100, (current_hours / treat["hours"]) * 100)
+            progress_bar = (
+                f"[{'=' * int(progress/2)}{' ' * (50-int(progress/2))}] {progress:.1f}%"
+            )
+            table.add_row(
+                str(treat["hours"]), progress_bar, treat["treat"]["description"]
+            )
+        console.print(table)
+        print()
+
+    # Show basic treat if it exists
+    if settings.get("treat"):
+        print(f"Basic treat: {settings['treat']['description']}")
+        print(f"(Available after completing a stint)")
 
 
 def main():
@@ -517,10 +668,10 @@ def main():
         {
             "code": "lw",
             "help": "Show week",
-            "func": show_summary,
+            "func": show_week,
             "type": "stats",
         },
-        {"code": "lt", "help": "Show treats", "func": show_summary, "type": "stats"},
+        {"code": "lt", "help": "Show treats", "func": show_treats, "type": "stats"},
         {"code": "s", "help": "Start stint", "func": start_stint, "type": "other"},
         {"code": "c", "help": "Clear console", "func": clear_console, "type": "other"},
         {
