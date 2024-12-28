@@ -7,7 +7,22 @@ from aioconsole import ainput
 import questionary
 import sys
 import os
+from rich.console import Console
+from rich.table import Table
+from typing import Literal
 
+
+"""
+TO DO
+- Add past weeks bar chart in summary which shows a row for the total time for each of the last max 10 weeks up to current week
+- Add treat summary which insentivizes more treats, and shows progress towards each treat
+- Add week functionality where you can specify a date or range of dates and gives you data accordingly
+    - In the input it tells you the earliest date you can call to get week data
+    - When lw is called just have a continuous input which can either take:
+        - Single date - Show a single bar chart for each of the days in that week and then just a number for the total time spent
+        - Date range - Shows a single bar chart with the total time spent for each of the weeks in the date range
+    - This should be able to take any date from oldest log to current day. Just get the week for whatever the date is in
+"""
 
 TITLE = "Stint Tracker"
 SETTINGS_PATH = "/Users/mylesheller/Library/Mobile Documents/com~apple~CloudDocs/Git/stint-tracker/settings.json"
@@ -17,6 +32,7 @@ hour = 60 * 60
 day = hour * 24
 week = day * 7
 year = day * 365
+days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def time_to_seconds(time: str):
@@ -147,10 +163,17 @@ def save_json(obj, path=SETTINGS_PATH):
         json.dump(obj, file, indent=2)
 
 
-async def start_stint_async():
-    with open(SETTINGS_PATH, "r") as file:
-        settings = json.load(file)
+def get_json(path=SETTINGS_PATH):
+    with open(path, "r") as file:
+        return json.load(file)
 
+
+def get_logs() -> list[dict]:
+    return get_json(LOGS_PATH)
+
+
+async def start_stint_async():
+    settings = get_json()
     selected: str = await questionary.select(
         "Select stint:",
         choices=[*settings["stint_options"], "Other"],
@@ -208,32 +231,127 @@ def clear_console():
         _ = os.system("clear")
 
 
-def get_week_data(week_start, logs_list, is_first=False):
+# Printing
+
+
+def print_week(times: list[int], limit_first=False, limit_today=False):
+    current_weekday = time.localtime(time.time()).tm_wday
+    print_days = not limit_first
+    for i, duration in enumerate(times):
+        if duration:
+            print_days = True
+        if print_days and (not limit_today or i <= current_weekday):
+            print(
+                f"{days[i]}  -  {seconds_to_time(duration)}{'  <-- Today' if i == current_weekday and limit_today else ''}"
+            )
+
+
+def print_bar_chart(values, labels=None, max_width=50, title=None, show_values=True):
+    """Prints a horizontal bar chart using Unicode block characters
+
+    Args:
+        values: List of numerical values
+        labels: List of labels (optional)
+        max_width: Maximum width of the bars in characters
+        title: Chart title (optional)
+        show_values: Whether to show numerical values at end of bars
+    """
+    if not values:
+        return
+
+    BLOCK = "█"
+    max_val = max(values)
+
+    labels = labels or [str(i + 1) for i in range(len(values))]
+    label_width = max(len(str(label)) for label in labels)
+
+    if title:
+        print(f"\n{title}")
+
+    for i, value in enumerate(values):
+        if max_val == 0:
+            bar_width = 0
+        else:
+            bar_width = int((value / max_val) * max_width)
+
+        label = f"{labels[i]:>{label_width}}"
+
+        value_display = f" {seconds_to_time(value)}" if show_values else ""
+
+        print(f"{label} | {BLOCK * bar_width}{value_display}")
+
+
+def print_rich_bar_chart(
+    values,
+    labels=None,
+    max_width=50,
+    title=None,
+    justify_labels: Literal["left", "right"] = "left",
+    start_at_label: int | None = None,
+):
+    console = Console()
+    table = Table(title=title, show_header=False, box=None)
+
+    max_val = max(values)
+
+    for i, value in enumerate(values):
+        if labels:
+            if justify_labels == "left":
+                idx = max(i, start_at_label) if start_at_label else i
+            else:
+                idx = (
+                    (
+                        min(len(labels), start_at_label)
+                        if start_at_label
+                        else len(labels)
+                    )
+                    - len(values)
+                    + 1
+                    + i
+                )
+            label = labels[max(min(idx, len(labels) - 1), 0)]
+        else:
+            label = str(i + 1)
+
+        bar_width = int((value / max_val) * max_width) if max_val > 0 else 0
+        table.add_row(
+            f"{label:>3}",
+            "│",
+            "█" * bar_width,
+            f"{seconds_to_time(value)}",
+        )
+    print()
+    console.print(table)
+
+
+def get_week_data(week_start, logs_list, is_first=False, is_last=False):
     daily_totals = []
-    for i in range(7):
+
+    add_day = not is_first
+    for i in range(time.localtime(time.time()).tm_wday + 1 if is_last else 7):
         day_start = week_start + (i * day)
         day_end = day_start + day
         day_logs = [log for log in logs_list if day_start <= log["start"] < day_end]
-        daily_totals.append(sum(log["duration"] for log in day_logs))
+        total = sum(log["duration"] for log in day_logs)
+        add_day = add_day or total
+        add_day and daily_totals.append(total)
 
     return {
         "daily_totals": daily_totals,
         "total": sum(daily_totals),
         "start": week_start,
+        "date": time.strftime("%Y-%m-%d", time.localtime(week_start)),
         "is_first": is_first,
+        "is_last": is_last,
     }
 
 
-def get_all_week_averages(logs_list):
-    """Gets average daily totals across all weeks since first log"""
-
-
-def get_recent_weeks_data(logs_list, num_weeks=None):
+def get_weeks_data(logs=get_logs(), num_weeks=None):
     """Gets week data for specified number of recent weeks, or all weeks if num_weeks is None"""
-    if not logs_list:
+    if not logs:
         return []
 
-    first_log = min(logs_list, key=lambda x: x["start"])
+    first_log = min(logs, key=lambda x: x["start"])
 
     now = time.time()
     today_start = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
@@ -252,40 +370,129 @@ def get_recent_weeks_data(logs_list, num_weeks=None):
     for i in range(weeks_to_fetch):
         week_start = current_week_start - (i * week)
         week_logs = [
-            log for log in logs_list if week_start <= log["start"] < week_start + week
+            log for log in logs if week_start <= log["start"] < week_start + week
         ]
-        weeks_data.append(get_week_data(week_start, week_logs, not i))
-
+        weeks_data.append(
+            get_week_data(week_start, week_logs, i >= weeks_to_fetch - 1, i == 0)
+        )
+    weeks_data.reverse()
     return weeks_data
 
 
-def show_stats():
-    with open(LOGS_PATH, "r") as file:
-        logs: list = json.load(file)
+def get_total_duration(logs=get_logs()):
+    return sum(log["duration"] for log in logs)
 
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-    # Get all weeks data
-    weeks_data = get_recent_weeks_data(logs)
+def show_all_week_averages(logs=get_logs()):
+    weeks_data = get_weeks_data(logs)
 
-    # Show last complete week if it exists
-    if len(weeks_data) > 1:
-        last_week = weeks_data[1]  # Index 1 because 0 is current week
-        print("\n\n\nLast week:")
-        for i, duration in enumerate(last_week["daily_totals"]):
-            print(f"{days[i]}  -  {seconds_to_time(duration)}")
-        print(f"\nLast week total: {seconds_to_time(last_week['total'])}")
+    daily_sums = [0] * 7
+    daily_counts = [0] * 7
 
-    # Show current week
-    this_week = weeks_data[0]
-    current_weekday = time.localtime(time.time()).tm_wday
-    print("\nThis week:")
-    for i, duration in enumerate(this_week["daily_totals"]):
-        if i <= current_weekday:
-            print(
-                f"{days[i]}  -  {seconds_to_time(duration)}{'  <-- Today' if i == current_weekday else ''}"
+    for week in weeks_data:
+        offset = (
+            (
+                (time.localtime(time.time()).tm_wday + 1 if week["is_last"] else 7)
+                - len(week["daily_totals"])
             )
-    print(f"\nThis week total: {seconds_to_time(this_week['total'])}")
+            if week["is_first"]
+            else 0
+        )
+        for i, total in enumerate(week["daily_totals"]):
+            daily_sums[i + offset] += total
+            daily_counts[i + offset] += 1
+
+    averages = [
+        round((daily_sums[i] / daily_counts[i])) if daily_counts[i] > 0 else 0
+        for i in range(7)
+    ]
+    print_rich_bar_chart(averages, labels=days, title="Daily Averages")
+
+    print(f"\nWeeks analyzed: {len(weeks_data)}")
+
+
+def get_running_max(lst: list[int], run_num=1, return_current_run=False):
+    max_value = 0
+    running_value = 0
+    running_num = 0
+    for value in lst:
+        if running_num < run_num:
+            running_num += 1
+            running_value += value
+
+        if running_num >= run_num:
+            max_value = max(max_value, running_value)
+            running_num = 0
+            running_value = 0
+
+    if return_current_run:
+        return {
+            "max_value": max_value,
+            "last_run": running_value if running_num else sum(lst[-run_num:]),
+        }
+    return max_value
+
+
+def get_high_score(logs=get_logs(), unit: Literal["day", "week"] = "day", amount=1):
+    weeks_data = get_weeks_data(logs)
+
+    scores = []
+    for week_data in weeks_data:
+        if unit == "day":
+            scores.extend(week_data["daily_totals"])
+        else:
+            scores.append(sum(week_data["daily_totals"]))
+
+    result = get_running_max(scores, amount, True)
+
+    return {
+        "current": result["last_run"],
+        "high_score": result["max_value"],
+    }
+
+
+def show_high_scores(logs=get_logs(), settings=get_json()):
+    intervals = json.loads(json.dumps(settings["high_score_intervals"]))
+    intervals.reverse()
+    for interval in intervals:
+        result = get_high_score(logs, interval["unit"], interval["amount"])
+        print_rich_bar_chart(
+            title=f'{interval["amount"]} {interval["unit"].capitalize()} High Score',
+            values=[result["high_score"], result["current"]],
+            labels=["High", "Current"],
+        )
+
+
+def show_summary():
+    logs = get_logs()
+    settings = get_json()
+
+    weeks_data = get_weeks_data(logs, 2)
+
+    show_all_week_averages(logs)
+
+    print()
+    show_high_scores(logs, settings)
+
+    print()
+    titles = ["This", "Last"][: len(weeks_data)]
+    titles.reverse()
+    for i, week_data in enumerate(weeks_data):
+        print_rich_bar_chart(
+            week_data["daily_totals"],
+            labels=days,
+            title=f"{titles[i]} Week's Activity",
+            justify_labels="right",
+            start_at_label=(
+                time.localtime(time.time()).tm_wday if week_data["is_last"] else None
+            ),
+        )
+
+    print(f"\nTotal duration: {seconds_to_time(get_total_duration(logs))}\n")
+
+
+def show_week(id: str):
+    pass
 
 
 def main():
@@ -296,14 +503,14 @@ def main():
         print()
 
     commands = [
-        {"code": "l", "help": "Show summary", "func": show_stats, "type": "stats"},
+        {"code": "l", "help": "Show summary", "func": show_summary, "type": "stats"},
         {
             "code": "lw",
-            "help": "Show week avgs",
-            "func": show_stats,
+            "help": "Show week",
+            "func": show_summary,
             "type": "stats",
         },
-        {"code": "lt", "help": "Show treats", "func": show_stats, "type": "stats"},
+        {"code": "lt", "help": "Show treats", "func": show_summary, "type": "stats"},
         {"code": "s", "help": "Start stint", "func": start_stint, "type": "other"},
         {"code": "c", "help": "Clear console", "func": clear_console, "type": "other"},
         {
