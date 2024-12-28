@@ -90,9 +90,7 @@ def clear_print(text: str, lines_to_clear: int = 1):
     if lines_to_clear > 1:
         for _ in range(lines_to_clear - 1):
             print("\033[A\033[K", end="")
-    else:
-        print(f"\r{' ' * 100}", end="")
-    print(f"\r{text}", end="")
+    print(f"\033[K\r{text}", end="", flush=True)
 
 
 async def sleep_verbose(
@@ -551,4 +549,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    asyncio.run(stop_watch())
