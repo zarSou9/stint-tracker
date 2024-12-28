@@ -163,13 +163,18 @@ def save_json(obj, path=SETTINGS_PATH):
         json.dump(obj, file, indent=2)
 
 
-def get_json(path=SETTINGS_PATH):
-    with open(path, "r") as file:
-        return json.load(file)
+def get_json(path=SETTINGS_PATH, default={}):
+    try:
+        with open(path, "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        with open(path, "w") as file:
+            json.dump(default, file)
+        return default
 
 
 def get_logs() -> list[dict]:
-    return get_json(LOGS_PATH)
+    return get_json(LOGS_PATH, [])
 
 
 async def start_stint_async():
