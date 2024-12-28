@@ -14,6 +14,11 @@ from typing import Literal
 
 """
 TO DO
+- After a stint is completed, allow for writing what was last worked on, which will be shown the next time I work on it to remind me.
+- When showing stats I should be able to filter by which projects I was working on.
+    - Be able to classify projects into different categories, and have the stats by default, show the default category
+    - Also treats should be for specific categories of projects
+    - Categories are essentially just new instances of the project, but I should be able to manage them with one script
 - Add past weeks bar chart in summary which shows a row for the total time for each of the last max 10 weeks up to current week
 - Add treat summary which insentivizes more treats, and shows progress towards each treat
 - Add week functionality where you can specify a date or range of dates and gives you data accordingly
@@ -25,8 +30,13 @@ TO DO
 """
 
 TITLE = "Stint Tracker"
-SETTINGS_PATH = "/Users/mylesheller/Library/Mobile Documents/com~apple~CloudDocs/Git/stint-tracker/settings.json"
-LOGS_PATH = "/Users/mylesheller/Library/Mobile Documents/com~apple~CloudDocs/Git/stint-tracker/logs.json"
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+SETTINGS_PATH = os.path.join(SCRIPT_DIR, "settings.json")
+LOGS_PATH = os.path.join(SCRIPT_DIR, "logs.json")
+SUCCESS_PATH = os.path.join(SCRIPT_DIR, "success.mp3")
+
 
 hour = 60 * 60
 day = hour * 24
@@ -89,7 +99,7 @@ def seconds_to_time(seconds: int):
 def clear_print(text: str, lines_to_clear: int = 1):
     if lines_to_clear > 1:
         for _ in range(lines_to_clear - 1):
-            print("\033[A\033[K", end="")
+            print("\033[A\033[K", end="", flush=True)
     print(f"\033[K\r{text}", end="", flush=True)
 
 
@@ -126,34 +136,26 @@ async def stop_watch(
     elapsed_message="Elapsed time",
     stop_message="cancel",
     end_message: str | None = None,
-    stop_code="c",
     start_time=time.time(),
 ):
-    async def get_input():
-        while True:
-            user_input = await ainput()
-            if user_input.lower() == stop_code.lower():
-                return True
-
-    input_task = asyncio.create_task(get_input())
     print()
     try:
-        while not input_task.done():
+        while True:
             elapsed_time = time.time() - start_time
-            sys.stdout.write(
-                f"\033[A\033[K\r{elapsed_message}: {seconds_to_time(round(elapsed_time))}\nEnter {stop_code} to {stop_message}: "
+            clear_print(
+                f"{elapsed_message}: {seconds_to_time(round(elapsed_time))}\nPress ^C to {stop_message}: ",
+                lines_to_clear=2,
             )
-            sys.stdout.flush()
-            await asyncio.sleep(max(0.1, 1 - (elapsed_time - round(elapsed_time))))
-    finally:
-        if not input_task.done():
-            input_task.cancel()
-
-    # Final output
-    sys.stdout.write(
-        f"\r{end_message + ' - ' if end_message else ''}Final time: {seconds_to_time(round(time.time() - start_time))}\n"
-    )
-    sys.stdout.flush()
+            try:
+                await asyncio.sleep(max(0.1, 1 - (elapsed_time - round(elapsed_time))))
+            except asyncio.CancelledError:
+                raise KeyboardInterrupt()
+    except KeyboardInterrupt:
+        print()
+        clear_print(
+            f"{end_message + ' - ' if end_message else ''}Final time: {seconds_to_time(round(time.time() - start_time))}\n"
+        )
+    return round(time.time() - start_time)
 
 
 def save_json(obj, path=SETTINGS_PATH):
@@ -200,16 +202,17 @@ async def start_stint_async():
         "Stint valid!",
         "Stint canceled",
     )
-    await asyncio.gather(
-        asyncio.to_thread(playsound, "success.mp3"),
-        stop_watch(
-            stop_message="end the stint",
-            end_message="Logging stint",
-            stop_code="s",
-            start_time=start_time,
-        ),
-    )
-
+    try:
+        await asyncio.gather(
+            asyncio.to_thread(playsound, SUCCESS_PATH),
+            stop_watch(
+                stop_message="end the stint",
+                end_message="Logging stint",
+                start_time=start_time,
+            ),
+        )
+    except asyncio.CancelledError:
+        pass
     with open(LOGS_PATH, "r") as file:
         logs: list = json.load(file)
     logs.append(
@@ -221,10 +224,14 @@ async def start_stint_async():
         }
     )
     save_json(logs, LOGS_PATH)
+    print("Stint Saved!\n")
 
 
 def start_stint():
-    asyncio.run(start_stint_async())
+    try:
+        asyncio.run(start_stint_async())
+    except KeyboardInterrupt:
+        pass
 
 
 def clear_console():
