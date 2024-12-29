@@ -8,6 +8,7 @@ import questionary
 import sys
 import os
 from rich.console import Console
+from rich.table import box
 from rich.table import Table
 from typing import Literal
 import shutil
@@ -16,7 +17,6 @@ import shutil
 """
 TO DO
 - Add the amount of time I have to eat a treat after I finish the stint
-- Add a show last logs function which just displays recent logs
 - When showing stats I should be able to filter by which projects I was working on.
     - Be able to classify projects into different categories, and have the stats by default, show the default category
     - Also treats should be for specific categories of projects
@@ -535,7 +535,7 @@ def show_summary():
     print(f"\nTotal duration: {seconds_to_time(get_total_duration(logs))}\n")
 
 
-def show_week(logs=get_logs(), settings=get_json()):
+def show_week(logs=get_logs()):
     if not logs:
         print("\nNo logs found.")
         return
@@ -626,6 +626,96 @@ def show_week(logs=get_logs(), settings=get_json()):
         print("\nInvalid date format. Please use YYYY-MM-DD.")
 
 
+def show_logs(logs=get_logs()):
+    if not logs:
+        print("\nNo logs found.")
+        return
+
+    # Get unique tasks from logs
+    tasks = sorted(set(log["task"] for log in logs))
+
+    # Let user select task
+    selected = questionary.select(
+        "Select task to view:",
+        choices=[*tasks, "All tasks"],
+    ).ask()
+
+    # Filter logs by selected task
+    filtered_logs = (
+        logs
+        if selected == "All tasks"
+        else [log for log in logs if log["task"] == selected]
+    )
+    if not filtered_logs:
+        print("\nNo logs found for this task.")
+        return
+
+    # Ask for number of logs to show
+    max_logs = len(filtered_logs)
+    while True:
+        try:
+            num_logs = input(
+                f"\nHow many recent logs to show? (1-{max_logs}, or press Enter for all): "
+            ).strip()
+            if not num_logs:  # Show all if empty
+                break
+            num_logs = int(num_logs)
+            if 1 <= num_logs <= max_logs:
+                filtered_logs = sorted(
+                    filtered_logs, key=lambda x: x["start"], reverse=True
+                )[:num_logs]
+
+                break
+            print(f"Please enter a number between 1 and {max_logs}")
+        except ValueError:
+            print("Please enter a valid number")
+
+    # Group logs by date
+    logs_by_date = {}
+    for log in filtered_logs:
+        date = time.strftime("%Y-%m-%d", time.localtime(log["start"]))
+        if date not in logs_by_date:
+            logs_by_date[date] = []
+        logs_by_date[date].append(log)
+
+    # Print logs grouped by date
+    console = Console()
+    for date in sorted(logs_by_date.keys()):
+        weekday = time.strftime("%A", time.strptime(date, "%Y-%m-%d"))
+        table = Table(title=f"{weekday}, {date}", show_header=True, box=box.ROUNDED)
+
+        table.add_column("Time", justify="left", style="cyan")
+        table.add_column("Duration", justify="right", style="green")
+        if selected == "All tasks":
+            table.add_column("Task", style="yellow")
+        table.add_column("Notes", style="white")
+
+        daily_total = 0
+        for log in sorted(logs_by_date[date], key=lambda x: x["start"]):
+            time_str = time.strftime("%I:%M %p", time.localtime(log["start"]))
+            duration_str = seconds_to_time(log["duration"])
+            daily_total += log["duration"]
+
+            row = [
+                time_str,
+                duration_str + "\n",
+                *([log["task"]] if selected == "All tasks" else []),
+                log["notes"] + "\n" if log["notes"] else "",
+            ]
+            table.add_row(*row)
+
+        table.add_row(
+            "Total:",
+            seconds_to_time(daily_total),
+            *([""] if selected == "All tasks" else []),
+            "",
+            style="bold",
+        )
+
+        print()
+        console.print(table)
+
+
 def show_treats(logs=get_logs(), settings=get_json()):
     console = Console()
     print("\nTreat Summary\n")
@@ -693,13 +783,9 @@ def main():
 
     commands = [
         {"code": "l", "help": "Show summary", "func": show_summary, "type": "stats"},
-        {
-            "code": "lw",
-            "help": "Show week",
-            "func": show_week,
-            "type": "stats",
-        },
+        {"code": "lw", "help": "Show week", "func": show_week, "type": "stats"},
         {"code": "lt", "help": "Show treats", "func": show_treats, "type": "stats"},
+        {"code": "ll", "help": "Show logs", "func": show_logs, "type": "stats"},
         {"code": "s", "help": "Start stint", "func": start_stint, "type": "other"},
         {"code": "c", "help": "Clear console", "func": clear_console, "type": "other"},
         {
