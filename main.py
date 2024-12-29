@@ -10,10 +10,12 @@ import os
 from rich.console import Console
 from rich.table import Table
 from typing import Literal
+import shutil
 
 
 """
 TO DO
+- Add the amount of time I have to eat a treat after I finish the stint
 - Add a show last logs function which just displays recent logs
 - When showing stats I should be able to filter by which projects I was working on.
     - Be able to classify projects into different categories, and have the stats by default, show the default category
@@ -110,6 +112,7 @@ async def sleep_verbose(
     cancel_message="Timer canceled",
     return_on_cancel=False,
 ):
+    print()
     try:
         end_time = time.time() + seconds
         while True:
@@ -196,7 +199,8 @@ async def start_stint_async():
     # Show last stint info for same task if available
     last_stint = next((log for log in reversed(logs) if log["task"] == selected), None)
     if last_stint and last_stint.get("notes"):
-        print(f"\nNotes from last time: {last_stint['notes']}\n")
+        print()
+        print_pretty(f"Notes from last time: {last_stint['notes']}")
 
     start_time = time.time()
 
@@ -249,6 +253,29 @@ def clear_console():
 
 
 # Printing
+
+
+def print_pretty(text: str, indent: int = 2, padding: int = 2):
+    """Prints text wrapped to terminal width with proper indentation and padding."""
+    terminal_width = shutil.get_terminal_size().columns
+    max_width = terminal_width - indent - padding
+
+    words = text.split()
+    current_line = []
+    current_length = 0
+
+    for word in words:
+        word_length = len(word)
+        if current_length + word_length + len(current_line) <= max_width:
+            current_line.append(word)
+            current_length += word_length
+        else:
+            print(" " * indent + " ".join(current_line))
+            current_line = [word]
+            current_length = word_length
+
+    if current_line:
+        print(" " * indent + " ".join(current_line))
 
 
 def print_week(times: list[int], limit_first=False, limit_today=False):
