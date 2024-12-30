@@ -13,7 +13,6 @@ from rich.table import Table
 from typing import Literal
 import shutil
 
-
 """
 TO DO
 - Add the amount of time I have to eat a treat after I finish the stint
@@ -34,9 +33,9 @@ TITLE = "Stint Tracker"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-SETTINGS_PATH = os.path.join(SCRIPT_DIR, "settings.json")
-LOGS_PATH = os.path.join(SCRIPT_DIR, "logs.json")
-SUCCESS_PATH = os.path.join(SCRIPT_DIR, "success.mp3")
+SETTINGS_PATH = os.path.join(SCRIPT_DIR, "data/settings.json")
+LOGS_PATH = os.path.join(SCRIPT_DIR, "data/logs.json")
+SUCCESS_PATH = os.path.join(SCRIPT_DIR, "sounds/success.mp3")
 
 
 hour = 60 * 60
