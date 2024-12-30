@@ -12,6 +12,8 @@ from rich.table import box
 from rich.table import Table
 from typing import Literal
 import shutil
+from threading import Thread
+
 
 """
 TO DO
@@ -33,10 +35,13 @@ TITLE = "Stint Tracker"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+os.makedirs(os.path.join(SCRIPT_DIR, "data"), exist_ok=True)
+
 SETTINGS_PATH = os.path.join(SCRIPT_DIR, "data/settings.json")
 LOGS_PATH = os.path.join(SCRIPT_DIR, "data/logs.json")
 SUCCESS_PATH = os.path.join(SCRIPT_DIR, "sounds/success.mp3")
-
+FIVE_MINS_LEFT_PATH = os.path.join(SCRIPT_DIR, "sounds/five_minutes_left.mp3")
+STINT_ENDED_PATH = os.path.join(SCRIPT_DIR, "sounds/stint_ended.mp3")
 
 hour = 60 * 60
 day = hour * 24
@@ -139,15 +144,30 @@ async def stop_watch(
     stop_message="cancel",
     end_message: str | None = None,
     start_time=time.time(),
+    time_limit: int | None = None,
+    say_time_limit=True,
+    time_up_sound_path=STINT_ENDED_PATH,
 ):
     print("\n")
+    five_mins_past = time_limit and time_limit < 260
     try:
         while True:
             elapsed_time = time.time() - start_time
+
             clear_print(
                 f"{elapsed_message}: {seconds_to_time(round(elapsed_time))}\nPress ^C to {stop_message}: ",
                 lines_to_clear=2,
             )
+            if time_limit:
+                if elapsed_time >= time_limit - 2:
+                    await asyncio.to_thread(playsound, time_up_sound_path)
+                    raise KeyboardInterrupt()
+                if say_time_limit:
+                    time_left = time_limit - elapsed_time
+                    if not five_mins_past and time_left <= 300:
+                        to_thread(playsound, FIVE_MINS_LEFT_PATH)
+                        five_mins_past = True
+
             try:
                 await asyncio.sleep(max(0.1, 1 - (elapsed_time - round(elapsed_time))))
             except asyncio.CancelledError:
@@ -179,9 +199,21 @@ def get_logs() -> list[dict]:
     return get_json(LOGS_PATH, [])
 
 
+def get_today_secs():
+    current_time = time.localtime()
+    return current_time.tm_hour * 3600 + current_time.tm_min * 60 + current_time.tm_sec
+
+
 async def start_stint_async():
     settings = get_json()
     logs = get_logs()
+
+    end_secs = time_to_seconds(settings["end_stint_at"])
+    min_stint_secs = time_to_seconds(settings["min_stint_time"])
+
+    if get_today_secs() + min_stint_secs + 2 >= end_secs:
+        print(f"\nToo late to start a stint - must end by {settings["end_stint_at"]}")
+        return
 
     selected: str = await questionary.select(
         "Select stint:",
@@ -195,7 +227,6 @@ async def start_stint_async():
             settings["stint_options"].append(selected)
             save_json(settings)
 
-    # Show last stint info for same task if available
     last_stint = next((log for log in reversed(logs) if log["task"] == selected), None)
     if last_stint and last_stint.get("notes"):
         print()
@@ -204,19 +235,15 @@ async def start_stint_async():
     start_time = time.time()
 
     await sleep_verbose(
-        time_to_seconds(settings["min_stint_time"]),
-        "Time until valid",
-        "Stint valid!",
-        "Stint canceled",
+        min_stint_secs, "Time until valid", "Stint valid!", "Stint canceled"
     )
+    to_thread(playsound, SUCCESS_PATH)
     try:
-        await asyncio.gather(
-            asyncio.to_thread(playsound, SUCCESS_PATH),
-            stop_watch(
-                stop_message="end the stint",
-                end_message="Logging stint",
-                start_time=start_time,
-            ),
+        await stop_watch(
+            stop_message="end the stint",
+            end_message="Logging stint",
+            start_time=start_time,
+            time_limit=end_secs - get_today_secs(),
         )
     except asyncio.CancelledError:
         pass
@@ -344,15 +371,15 @@ def print_rich_bar_chart(
             else:
                 idx = (
                     (
-                        min(len(labels), start_at_label)
-                        if start_at_label
+                        min(len(labels), start_at_label + 1)
+                        if start_at_label is not None
                         else len(labels)
                     )
                     - len(values)
-                    + 1
                     + i
                 )
-            label = labels[max(min(idx, len(labels) - 1), 0)]
+            idx = max(min(idx, len(labels) - 1), 0)
+            label = labels[idx]
         else:
             label = str(i + 1)
 
@@ -456,22 +483,13 @@ def show_all_week_averages(logs=get_logs()):
 
 def get_running_max(lst: list[int], run_num=1, return_current_run=False):
     max_value = 0
-    running_value = 0
-    running_num = 0
-    for value in lst:
-        if running_num < run_num:
-            running_num += 1
-            running_value += value
-
-        if running_num >= run_num:
-            max_value = max(max_value, running_value)
-            running_num = 0
-            running_value = 0
+    for i in range(1, len(lst) + 1):
+        max_value = max(sum(lst[max(0, i - run_num) : i]), max_value)
 
     if return_current_run:
         return {
             "max_value": max_value,
-            "last_run": running_value if running_num else sum(lst[-run_num:]),
+            "last_run": sum(lst[-run_num:]),
         }
     return max_value
 
@@ -787,12 +805,7 @@ def main():
         {"code": "ll", "help": "Show logs", "func": show_logs, "type": "stats"},
         {"code": "s", "help": "Start stint", "func": start_stint, "type": "other"},
         {"code": "c", "help": "Clear console", "func": clear_console, "type": "other"},
-        {
-            "code": "h",
-            "help": "Help",
-            "func": show_help,
-            "type": "other",
-        },
+        {"code": "h", "help": "Help", "func": show_help, "type": "other"},
     ]
     parser = argparse.ArgumentParser(description=TITLE, add_help=False)
     for command in commands:
@@ -817,6 +830,10 @@ def main():
     except KeyboardInterrupt:
         print()
         exit()
+
+
+def to_thread(func, *args):
+    Thread(target=func, args=args, daemon=True).start()
 
 
 if __name__ == "__main__":
