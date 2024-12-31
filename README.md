@@ -57,7 +57,7 @@ The app uses a `settings.json` file to manage:
 2. Install required dependencies:
 
 ```bash
-pip install playsound questionary rich aioconsole
+pip install playsound questionary rich
 ```
 
 3. Configure your `settings.json` file
@@ -83,7 +83,7 @@ python main.py
 ## Requirements
 
 - Python 3.x
-- Required packages: playsound, questionary, rich, aioconsole
+- Required packages: playsound, questionary, rich
 
 ## License
 

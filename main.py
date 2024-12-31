@@ -3,7 +3,6 @@ import time
 import asyncio
 from playsound import playsound
 import json
-from aioconsole import ainput
 import questionary
 import sys
 import os
@@ -33,6 +32,7 @@ os.makedirs(os.path.join(SCRIPT_DIR, "data"), exist_ok=True)
 
 SETTINGS_PATH = os.path.join(SCRIPT_DIR, "data/settings.json")
 LOGS_PATH = os.path.join(SCRIPT_DIR, "data/logs.json")
+TREAT_BANK_PATH = os.path.join(SCRIPT_DIR, "data/treat_bank.json")
 SUCCESS_PATH = os.path.join(SCRIPT_DIR, "sounds/success.mp3")
 FIVE_MINS_LEFT_PATH = os.path.join(SCRIPT_DIR, "sounds/five_minutes_left.mp3")
 STINT_ENDED_PATH = os.path.join(SCRIPT_DIR, "sounds/stint_ended.mp3")
@@ -256,6 +256,66 @@ async def start_stint_async():
     )
     save_json(logs, LOGS_PATH)
     print("Stint Saved!\n")
+
+    update_treats(logs, settings)
+
+
+def update_treats(logs=get_logs(), settings=get_json()):
+    treat_bank = get_json(TREAT_BANK_PATH, [])
+    now = time.time()
+
+    total_duration = get_total_duration(logs)
+
+    if settings.get("total_time_treats"):
+        earned_treats = []
+        for treat in settings["total_time_treats"]:
+            hours_threshold = treat["hours"] * 3600
+            if total_duration >= hours_threshold:
+                expires_at = treat["treat"].get("grace_period") and (
+                    now + time_to_seconds(treat["treat"]["grace_period"])
+                )
+                treat_bank.append(
+                    {
+                        "description": treat["treat"]["description"],
+                        "expires_at": expires_at,
+                    }
+                )
+                print(f"\nEarned treat: {treat['treat']['description']}")
+                earned_treats.append(treat)
+
+        settings["total_time_treats"] = [
+            t for t in settings["total_time_treats"] if t not in earned_treats
+        ]
+
+    if settings.get("high_score_intervals"):
+        for interval in settings["high_score_intervals"]:
+            if not interval.get("treats"):
+                continue
+
+            scores = get_high_score(logs, interval["unit"], interval["amount"])
+
+            earned_treats = []
+            for treat in interval["treats"]:
+                hours_threshold = treat["hours"] * 3600
+                if scores["current"] >= hours_threshold:
+                    expires_at = treat["treat"].get("grace_period") and (
+                        now + time_to_seconds(treat["treat"]["grace_period"])
+                    )
+                    treat_bank.append(
+                        {
+                            "description": treat["treat"]["description"],
+                            "expires_at": expires_at,
+                        }
+                    )
+                    print(f"\nEarned treat: {treat['treat']['description']}")
+                    earned_treats.append(treat)
+
+            interval["treats"] = [
+                t for t in interval["treats"] if t not in earned_treats
+            ]
+
+    save_json(treat_bank, TREAT_BANK_PATH)
+    save_json(settings, SETTINGS_PATH)
 
 
 def start_stint():
@@ -543,7 +603,7 @@ def show_summary():
             ),
         )
 
-    # print(f"\nTotal duration: {seconds_to_time(get_total_duration(logs))}\n")
+    print()
 
 
 def show_week(logs=get_logs()):
@@ -635,6 +695,8 @@ def show_week(logs=get_logs()):
 
     except ValueError:
         print("\nInvalid date format. Please use YYYY-MM-DD.")
+
+    print()
 
 
 def show_logs(logs=get_logs()):
@@ -731,7 +793,6 @@ def show_treats(logs=get_logs(), settings=get_json()):
     console = Console()
     print("\nTreat Summary\n")
 
-    # Get total duration in hours for relevant periods
     total_duration = get_total_duration(logs)
 
     # Show total time treats
@@ -796,7 +857,76 @@ def show_treats(logs=get_logs(), settings=get_json()):
     # Show basic treat if it exists
     if settings.get("treat"):
         print(f"Basic treat: {settings['treat']['description']}")
-        print(f"(Available after completing a stint)")
+        print(f"(Available after completing a stint)\n")
+
+
+def show_treat_bank():
+    console = Console()
+    treat_bank = get_json(TREAT_BANK_PATH, [])
+
+    # Filter out expired treats and notify the user
+    current_time = time.time()
+    expired_treats = [
+        treat
+        for treat in treat_bank
+        if treat["expires_at"] and current_time > treat["expires_at"]
+    ]
+    if expired_treats:
+        for treat in expired_treats:
+            print(f"Treat '{treat['description']}' has expired and has been removed.")
+        treat_bank = [treat for treat in treat_bank if treat not in expired_treats]
+        save_json(treat_bank, TREAT_BANK_PATH)
+
+    treat_bank.sort(key=lambda x: x["expires_at"])
+
+    if not treat_bank:
+        print("No treats available to redeem\n")
+        return
+
+    table = Table(
+        title="Available Treats",
+        show_header=True,
+    )
+    table.add_column("#", width=4)
+    table.add_column("Description", ratio=1)
+    table.add_column("Expires At", no_wrap=True)
+
+    for i, treat in enumerate(treat_bank):
+        expiry_str = "Never"
+        if treat["expires_at"]:
+            expiry_time = time.localtime(treat["expires_at"])
+            expiry_str = time.strftime("%a %d %b %H:%M", expiry_time)
+        table.add_row(str(i + 1), treat["description"], expiry_str)
+
+    console.print(table)
+    print()
+
+    try:
+        while True:
+            treat_num = input("\nEnter treat number to redeem (^C to cancel): ").strip()
+            if not treat_num:
+                continue
+
+            try:
+                idx = int(treat_num) - 1
+                if 0 <= idx < len(treat_bank):
+                    treat = treat_bank[idx]
+                    # Check if the treat has expired
+                    if treat["expires_at"] and current_time > treat["expires_at"]:
+                        print("This treat has expired and cannot be redeemed.")
+                        continue
+                    treat_bank.pop(idx)
+                    save_json(treat_bank, TREAT_BANK_PATH)
+                    print(f"\nRedeemed treat: {treat['description']}")
+                    break
+                else:
+                    print("Invalid treat number")
+            except ValueError:
+                print("Please enter a valid number")
+
+    except KeyboardInterrupt:
+        print()
+        return
 
 
 def main():
@@ -811,6 +941,7 @@ def main():
         {"code": "lw", "help": "Show week", "func": show_week, "type": "stats"},
         {"code": "lt", "help": "Show treats", "func": show_treats, "type": "stats"},
         {"code": "ll", "help": "Show logs", "func": show_logs, "type": "stats"},
+        {"code": "t", "help": "Treat bank", "func": show_treat_bank, "type": "other"},
         {"code": "s", "help": "Start stint", "func": start_stint, "type": "other"},
         {"code": "c", "help": "Clear console", "func": clear_console, "type": "other"},
         {"code": "h", "help": "Help", "func": show_help, "type": "other"},
