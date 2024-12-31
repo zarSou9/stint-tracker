@@ -22,13 +22,7 @@ TO DO
     - Be able to classify projects into different categories, and have the stats by default, show the default category
     - Also treats should be for specific categories of projects
     - Categories are essentially just new instances of the project, but I should be able to manage them with one script
-- Add past weeks bar chart in summary which shows a row for the total time for each of the last max 10 weeks up to current week
-- Verify week function - where you can specify a date or range of dates and gives you data accordingly
-    - In the input it tells you the earliest date you can call to get week data
-    - When lw is called just have a continuous input which can either take:
-        - Single date - Show a single bar chart for each of the days in that week and then just a number for the total time spent
-        - Date range - Shows a single bar chart with the total time spent for each of the weeks in the date range
-    - This should be able to take any date from oldest log to current day. Just get the week for whatever the date is in
+- Add an option for show week to just give the last {num} weeks
 """
 
 TITLE = "Stint Tracker"
@@ -549,7 +543,7 @@ def show_summary():
             ),
         )
 
-    print(f"\nTotal duration: {seconds_to_time(get_total_duration(logs))}\n")
+    # print(f"\nTotal duration: {seconds_to_time(get_total_duration(logs))}\n")
 
 
 def show_week(logs=get_logs()):
@@ -738,23 +732,32 @@ def show_treats(logs=get_logs(), settings=get_json()):
     print("\nTreat Summary\n")
 
     # Get total duration in hours for relevant periods
-    total_hours = get_total_duration(logs) / 3600
+    total_duration = get_total_duration(logs)
 
     # Show total time treats
     if settings.get("total_time_treats"):
-        table = Table(title="Total Time Treats", show_header=True)
-        table.add_column("Hours Required")
-        table.add_column("Progress")
-        table.add_column("Treat")
+        table = Table(
+            title=f"Total Time Treats",
+            show_header=True,
+        )
+        table.add_column("Hours", width=8)
+        table.add_column("Progress", no_wrap=True)
+        table.add_column("Treat", ratio=1)
 
         for treat in sorted(settings["total_time_treats"], key=lambda x: x["hours"]):
-            progress = min(100, (total_hours / treat["hours"]) * 100)
+            progress = min(100, (total_duration / (treat["hours"] * 3600)) * 100)
             progress_bar = (
                 f"[{'=' * int(progress/2)}{' ' * (50-int(progress/2))}] {progress:.1f}%"
             )
             table.add_row(
                 str(treat["hours"]), progress_bar, treat["treat"]["description"]
             )
+        table.add_row(
+            "\nCurrent:",
+            "\n" + seconds_to_time(total_duration),
+            "",
+            style="bold",
+        )
         console.print(table)
         print()
 
@@ -764,24 +767,29 @@ def show_treats(logs=get_logs(), settings=get_json()):
             continue
 
         scores = get_high_score(logs, interval["unit"], interval["amount"])
-        current_hours = scores["current"] / 3600
 
         title = f"{interval['amount']} {interval['unit'].capitalize()}"
         if interval["amount"] > 1:
             title += "s"
-        table = Table(title=f"{title} Treats", show_header=True)
-        table.add_column("Hours Required")
-        table.add_column("Progress")
-        table.add_column("Treat")
+        table = Table(
+            title=f"{title} Treats",
+            show_header=True,
+        )
+        table.add_column("Hours", width=8)
+        table.add_column("Progress", no_wrap=True)
+        table.add_column("Treat", ratio=1)
 
         for treat in sorted(interval["treats"], key=lambda x: x["hours"]):
-            progress = min(100, (current_hours / treat["hours"]) * 100)
+            progress = min(100, (scores["current"] / (treat["hours"] * 3600)) * 100)
             progress_bar = (
                 f"[{'=' * int(progress/2)}{' ' * (50-int(progress/2))}] {progress:.1f}%"
             )
             table.add_row(
                 str(treat["hours"]), progress_bar, treat["treat"]["description"]
             )
+        table.add_row(
+            "\nCurrent:", "\n" + seconds_to_time(scores["current"]), "", style="bold"
+        )
         console.print(table)
         print()
 
