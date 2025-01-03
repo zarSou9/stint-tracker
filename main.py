@@ -237,7 +237,7 @@ async def start_stint_async():
             stop_message="end the stint",
             end_message="Logging stint",
             start_time=start_time,
-            time_limit=end_secs - get_today_secs(),
+            time_limit=end_secs - get_today_secs() + min_stint_secs,
         )
     except asyncio.CancelledError:
         pass
