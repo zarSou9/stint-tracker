@@ -1,2 +1,5 @@
-data
 .DS_Store
+
+logs.json
+settings.json
+treat_bank.json

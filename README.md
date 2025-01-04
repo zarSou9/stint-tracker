@@ -1,6 +1,6 @@
 # Stint Tracker
 
-A command-line productivity tool that helps you track work sessions and maintain motivation through a customizable reward system.
+Gamify your life with a command-line productivity tool that helps you track work sessions and maintain motivation through a customizable reward system.
 
 ## Features
 
@@ -26,30 +26,16 @@ A command-line productivity tool that helps you track work sessions and maintain
 
 ## Configuration
 
-The app uses a `settings.json` file to manage:
+The app uses a `data/settings.json` file to manage:
 
 - Minimum stint duration
 - Available task categories
+- Time of day past which stints won't be tracked: `end_stint_at`
 - Reward definitions including:
   - Individual stint rewards
   - Cumulative time rewards
   - High score interval rewards
   - Grace periods for claiming rewards
-
-### Sample Settings Structure
-
-```json
-{
-    "min_stint_time": "20:25",
-    "stint_options": ["Task 1", "Task 2"],
-    "treat": {
-        "description": "Basic reward",
-        "grace_period": "5:00"
-    },
-    "total_time_treats": [...],
-    "high_score_intervals": [...]
-}
-```
 
 ## Installation
 
@@ -60,7 +46,7 @@ The app uses a `settings.json` file to manage:
 pip install playsound questionary rich
 ```
 
-3. Configure your `settings.json` file
+3. Configure your `data/settings.json` file in accordance with `data/settings.example.json`
 4. Run the application:
 
 ```bash
@@ -78,6 +64,7 @@ python main.py
 
 ## Notes
 
+- Time is represted in the following format: YY:WW:DD:HH:MM:SS
 - The timer will add a newline after each update if the terminal window is not wide enough
 
 ## Requirements

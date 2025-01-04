@@ -1,0 +1,45 @@
+{
+   "min_stint_time": "15:00",
+   "end_stint_at": "23:00:00",
+   "stint_options": ["Example project 1", "Example project 2"],
+   "treat": {
+      "description": "Example treat for after completing a stint",
+      "grace_period": "5:00"
+   },
+   "total_time_treats": [
+      {
+         "hours": 50,
+         "treat": {
+            "description": "Example treat after reaching 50 hours of total stint time",
+            "grace_period": "5:00:00:00"
+         }
+      }
+   ],
+   "high_score_intervals": [
+      {
+         "unit": "day",
+         "amount": 1,
+         "treats": [
+            {
+               "hours": 6,
+               "treat": {
+                  "description": "1 day high score of 6 hours treat (with no grace_period - this treat won't expire)"
+               }
+            }
+         ]
+      },
+      {
+         "unit": "week",
+         "amount": 1,
+         "treats": [
+            {
+               "hours": 20,
+               "treat": {
+                  "description": "1 week high score of 20 hours treat (with a grace_period of 1 week)",
+                  "grace_period": "1:00:00:00:00"
+               }
+            }
+         ]
+      }
+   ]
+}
