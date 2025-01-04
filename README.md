@@ -5,7 +5,7 @@ Gamify your life with a command-line productivity tool that helps you track work
 ## Features
 
 - **Timed Work Sessions**: Start tracked work sessions with a minimum required duration
-- **Flexible Task Categories**: Choose from preset tasks or add custom ones on the fly
+- **Project Management**: Choose from customizable project list and leave notes for your next work session
 - **Progress Tracking**:
   - Daily and weekly activity visualization
   - Running averages for each day of the week
@@ -19,7 +19,9 @@ Gamify your life with a command-line productivity tool that helps you track work
 
 - `l` - Show activity summary with charts and statistics
 - `lw` - Display detailed week view
-- `lt` - View available treats and progress
+- `lt` - View progress towards treats
+- `ll` - View recent stint logs
+- `t` - View and redeem available treats
 - `s` - Start a new stint
 - `c` - Clear console
 - `h` - Show help menu
@@ -29,7 +31,7 @@ Gamify your life with a command-line productivity tool that helps you track work
 The app uses a `data/settings.json` file to manage:
 
 - Minimum stint duration
-- Available task categories
+- Available projects
 - Time of day past which stints won't be tracked: `end_stint_at`
 - Reward definitions including:
   - Individual stint rewards
