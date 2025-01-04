@@ -2,9 +2,9 @@
    "min_stint_time": "15:00",
    "end_stint_at": "23:00:00",
    "stint_options": ["Example project 1", "Example project 2"],
-   "treat": {
-      "description": "Example treat for after completing a stint",
-      "grace_period": "5:00"
+   "treats_after_stint": {
+      "max_duration": "15:00",
+      "treats": ["Juggle", "Walk", "Workout"]
    },
    "total_time_treats": [
       {

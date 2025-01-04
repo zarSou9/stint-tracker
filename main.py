@@ -16,7 +16,6 @@ from threading import Thread
 
 """
 TO DO
-- Add the amount of time I have to eat a treat after I finish the stint
 - When showing stats I should be able to filter by which projects I was working on.
     - Be able to classify projects into different categories, and have the stats by default, show the default category
     - Also treats should be for specific categories of projects
@@ -242,20 +241,32 @@ async def start_stint_async():
     except asyncio.CancelledError:
         pass
 
+    end_time = time.time()
+
     notes = input("\nNotes to future self (optional): ").strip()
+    print()
+
+    treat_selected: str = await questionary.select(
+        f"Select treat{f" (max duration: {settings['treats_after_stint']['max_duration']})"
+        if settings['treats_after_stint'].get('max_duration')
+        else ''}:",
+        choices=["No treat", *settings["treats_after_stint"]["treats"]],
+    ).ask_async()
 
     with open(LOGS_PATH, "r") as file:
         logs: list = json.load(file)
+
     logs.append(
         {
             "task": selected,
             "start": round(start_time),
-            "duration": round(time.time() - start_time),
+            "duration": round(end_time - start_time),
             "notes": notes or None,
+            "treat_picked": None if treat_selected == "No treat" else treat_selected,
         }
     )
     save_json(logs, LOGS_PATH)
-    print("Stint Saved!\n")
+    print("\nStint Saved!\n")
 
     update_treats(logs, settings)
 
@@ -280,7 +291,7 @@ def update_treats(logs=get_logs(), settings=get_json()):
                         "expires_at": expires_at,
                     }
                 )
-                print(f"\nEarned treat: {treat['treat']['description']}")
+                print(f"\nEarned treat: {treat['treat']['description']}\n")
                 earned_treats.append(treat)
 
         settings["total_time_treats"] = [
@@ -307,7 +318,7 @@ def update_treats(logs=get_logs(), settings=get_json()):
                             "expires_at": expires_at,
                         }
                     )
-                    print(f"\nEarned treat: {treat['treat']['description']}")
+                    print(f"\nEarned treat: {treat['treat']['description']}\n")
                     earned_treats.append(treat)
 
             interval["treats"] = [
@@ -853,11 +864,6 @@ def show_treats(logs=get_logs(), settings=get_json()):
         )
         console.print(table)
         print()
-
-    # Show basic treat if it exists
-    if settings.get("treat"):
-        print(f"Basic treat: {settings['treat']['description']}")
-        print(f"(Available after completing a stint)\n")
 
 
 def show_treat_bank():
