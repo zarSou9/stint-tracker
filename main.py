@@ -16,10 +16,9 @@ from threading import Thread
 
 """
 TO DO
-- When showing stats I should be able to filter by which projects I was working on.
-    - Be able to classify projects into different categories, and have the stats by default, show the default category
-    - Also treats should be for specific categories of projects
-    - Categories are essentially just new instances of the project, but I should be able to manage them with one script
+- Make treats specific to project
+- Create a choose project function which is called at the start of every command to filter the logs and settings to that project
+- Add deadlines where you must accomplish something by a given deadline
 - Add an option for show week to just give the last {num} weeks
 """
 
@@ -210,14 +209,14 @@ async def start_stint_async():
 
     selected: str = await questionary.select(
         "Select stint:",
-        choices=[*settings["stint_options"], "Other"],
+        choices=[*settings["projects"], "Other"],
     ).ask_async()
 
     if selected == "Other":
         selected = input("Describe the task: ")
         add_task = input("Add task to stint options? (y/n) ")
         if add_task.lower().find("y") != -1:
-            settings["stint_options"].append(selected)
+            settings["projects"].append(selected)
             save_json(settings)
 
     last_stint = next((log for log in reversed(logs) if log["task"] == selected), None)

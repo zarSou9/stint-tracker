@@ -1,7 +1,7 @@
 {
-   "min_stint_time": "15:00",
+   "min_stint_time": "10:00",
    "end_stint_at": "23:00:00",
-   "stint_options": ["Example project 1", "Example project 2"],
+   "projects": ["Example project 1", "Example project 2"],
    "treats_after_stint": {
       "max_duration": "15:00",
       "treats": ["Juggle", "Walk", "Workout"]
