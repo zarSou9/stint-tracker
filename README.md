@@ -2,6 +2,19 @@
 
 Gamify your life with a command-line productivity tool that helps you track work sessions and maintain motivation through a customizable reward system.
 
+## Features
+
+- **Timed Work Sessions**: Start tracked work sessions with a minimum required duration
+- **Project Management**: Choose from customizable project list and leave notes for your next work session
+- **Progress Tracking**:
+  - Daily and weekly activity visualization
+  - Running averages for each day of the week
+  - High score tracking across multiple time intervals
+- **Reward System**:
+  - Earn treats for completing individual stints
+  - Unlock special rewards for reaching time-based milestones
+  - Track progress towards daily, weekly, and total-time achievement goals
+
 ## Setup
 
 1. Clone the repository
@@ -18,18 +31,14 @@ pip install playsound questionary rich
 python main.py
 ```
 
-## Features
+## Usage
 
-- **Timed Work Sessions**: Start tracked work sessions with a minimum required duration
-- **Project Management**: Choose from customizable project list and leave notes for your next work session
-- **Progress Tracking**:
-  - Daily and weekly activity visualization
-  - Running averages for each day of the week
-  - High score tracking across multiple time intervals
-- **Reward System**:
-  - Earn treats for completing individual stints
-  - Unlock special rewards for reaching time-based milestones
-  - Track progress towards daily, weekly, and total-time achievement goals
+1. Start the application
+2. Use command `s` to begin a new stint
+3. Select or enter your task
+4. Complete the minimum required time
+5. Continue working until you're ready to end the stint
+6. Use other commands to track your progress and view statistics
 
 ## Commands
 
@@ -54,15 +63,6 @@ The app uses a `data/settings.json` file to manage:
   - Cumulative time rewards
   - High score interval rewards
   - Grace periods for claiming rewards
-
-## Usage
-
-1. Start the application
-2. Use command `s` to begin a new stint
-3. Select or enter your task
-4. Complete the minimum required time
-5. Continue working until you're ready to end the stint
-6. Use other commands to track your progress and view statistics
 
 ## Notes
 
