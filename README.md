@@ -2,6 +2,22 @@
 
 Gamify your life with a command-line productivity tool that helps you track work sessions and maintain motivation through a customizable reward system.
 
+## Setup
+
+1. Clone the repository
+2. Install required dependencies:
+
+```bash
+pip install playsound questionary rich
+```
+
+3. Configure your `data/settings.json` file in accordance with `data/settings.example.json`
+4. Run the application:
+
+```bash
+python main.py
+```
+
 ## Features
 
 - **Timed Work Sessions**: Start tracked work sessions with a minimum required duration
@@ -38,22 +54,6 @@ The app uses a `data/settings.json` file to manage:
   - Cumulative time rewards
   - High score interval rewards
   - Grace periods for claiming rewards
-
-## Installation
-
-1. Clone the repository
-2. Install required dependencies:
-
-```bash
-pip install playsound questionary rich
-```
-
-3. Configure your `data/settings.json` file in accordance with `data/settings.example.json`
-4. Run the application:
-
-```bash
-python main.py
-```
 
 ## Usage
 
